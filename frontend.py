@@ -1,4 +1,4 @@
-# Frontend to readout the lakeshore224 as a MIDAS equipment 
+# Frontend to readout the Meson hall weather station as a MIDAS equipment 
 # Derek Fujimoto
 # Sep 2026
 
@@ -44,26 +44,27 @@ class WeatherEquipment(midas.frontend.EquipmentBase):
 
         # test read and set settings
         data = self.read_webpage()
-        self.client.odb_set(f'{self.odb_settings_dir}/Names', [self.simplify_name(name) for name in data.keys()])
-        self.client.odb_set(f'{self.odb_settings_dir}/Full Names', list(data.keys()))
-        self.client.odb_set(f'{self.odb_settings_dir}/Units', list(data.keys()))
+        self.client.odb_set(f'{self.odb_settings_dir}/Names {self.BANK_NAME}', 
+                            [self.simplify_name(name) for name in data.keys()])
+
+        full_names = [f'{name[:-1]} ({self.get_units(value)})' 
+                        for name, value in data.items() if name != "Pressure Tendency:"]
+
+        self.client.odb_set(f'{self.odb_settings_dir}/Full Names', full_names)
         
         # You can set the status of the equipment (appears in the midas status page)
         self.set_status("Initialized")
 
-    def get_unit(value):
-
-        if 'Time' in name:
-            unit = "" 
-        elif 'Press Tendency' == name:
-            unit = ""
+    @staticmethod
+    def get_units(value):
+        try:
+            value = "".join(str(value).split()[1:])
+        except ValueError: 
+            value = ""
         else:
-            unit = "".join(str(value).split()[1:])
-
-        unit = unit.replace('°C', 'C')
-        unit = unit.replace('°', 'deg')
-        return unit
-        
+            value = value.replace('°C', 'C')
+            value = value.replace('°', 'deg')
+        return value
 
     @staticmethod
     def simplify_name(name):
@@ -92,7 +93,7 @@ class WeatherEquipment(midas.frontend.EquipmentBase):
         """
 
         # fetch
-        req = requests.get(self.settings['hostname'])
+        req = requests.get(self.settings['hostname'], timeout=10)
         soup = BeautifulSoup(req.content, 'html.parser')
         table = soup.find('table', class_=self.TABLE_CLASS)
 
@@ -104,16 +105,13 @@ class WeatherEquipment(midas.frontend.EquipmentBase):
         for row in table.find_all('tr'):
             name, value = [cell.text.strip() for cell in row.find_all('td')]
 
-            # shorten and simplify names
-            name = self.simplify_name(name)
-
             # add data to dict
             if 'Time' in name:
                 data[name] = parser.parse(value).timestamp()
-            elif 'Press Tendency' == name:
+            elif 'Pressure Tendency:' == name:
                 continue
             else:
-                value = float(value.split()[0])
+                value = value
                 data[name] = value
 
         return data        
@@ -128,6 +126,10 @@ class WeatherEquipment(midas.frontend.EquipmentBase):
 
         # read data
         data = self.read_webpage()
+
+        # simplify data 
+        data = {self.simplify_name(name):float(str(value).split()[0]) 
+                    for name, value in data.items()}
 
         # bank names must be exactly 4 characters
         event = midas.event.Event()
