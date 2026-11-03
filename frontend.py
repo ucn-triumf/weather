@@ -44,13 +44,45 @@ class WeatherEquipment(midas.frontend.EquipmentBase):
 
         # test read and set settings
         data = self.read_webpage()
-        names = list(data.keys())
-        self.client.odb_set(f'{self.odb_settings_dir}/Names', names)
-
+        self.client.odb_set(f'{self.odb_settings_dir}/Names', [self.simplify_name(name) for name in data.keys()])
+        self.client.odb_set(f'{self.odb_settings_dir}/Full Names', list(data.keys()))
+        self.client.odb_set(f'{self.odb_settings_dir}/Units', list(data.keys()))
         
-
         # You can set the status of the equipment (appears in the midas status page)
         self.set_status("Initialized")
+
+    def get_unit(value):
+
+        if 'Time' in name:
+            unit = "" 
+        elif 'Press Tendency' == name:
+            unit = ""
+        else:
+            unit = "".join(str(value).split()[1:])
+
+        unit = unit.replace('°C', 'C')
+        unit = unit.replace('°', 'deg')
+        return unit
+        
+
+    @staticmethod
+    def simplify_name(name):
+
+        name = name.replace(':', '')
+        name = name.replace('Absolute', 'Abs')
+        name = name.replace('Adjusted', 'Adj')
+        name = name.replace('Altitude', 'Alt')
+        name = name.replace('Average', 'Avg')
+        name = name.replace('Barometric', 'Baro')
+        name = name.replace('Direction', 'Dir')
+        name = name.replace('Humidity', 'Hmd')
+        name = name.replace('Pressure', 'Press')
+        name = name.replace('Rolling', 'R')
+        name = name.replace('Saturated', 'Sat')
+        name = name.replace('Speed', 'Spd')
+        name = name.replace('Temperature', 'Tmp')
+
+        return name
 
     def read_webpage(self):
         """Parse the webpage
@@ -71,17 +103,18 @@ class WeatherEquipment(midas.frontend.EquipmentBase):
         data = {}
         for row in table.find_all('tr'):
             name, value = [cell.text.strip() for cell in row.find_all('td')]
-            name = name[:-1] # strip trailing colon
 
+            # shorten and simplify names
+            name = self.simplify_name(name)
+
+            # add data to dict
             if 'Time' in name:
                 data[name] = parser.parse(value).timestamp()
-            elif 'Pressure Tendency' == name:
+            elif 'Press Tendency' == name:
                 continue
             else:
-                vals = value.split()
-                value = float(vals[0])
-                unit = "".join(vals[1:])
-                data[f'{name}_{unit}'] = value
+                value = float(value.split()[0])
+                data[name] = value
 
         return data        
 

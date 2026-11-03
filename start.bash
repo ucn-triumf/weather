@@ -7,12 +7,12 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 cd $SCRIPT_DIR
 
 # create virtual env
-if [ ! -d "./.env" ]; then
+if [ ! -d "./env" ]; then
     echo "Creating python virtual environment" 
     python3 -m venv env
     
     # install dependencies
-    source .env/bin/activate
+    source env/bin/activate
     pip install -r requirements.txt
 else
     # source venv
