@@ -1,4 +1,4 @@
-python-dateutil
-beautifulsoup4
-requests
-numpy
+python-dateutil==2.9.0.post0
+beautifulsoup4==4.12.3
+requests==2.27.1
+numpy==1.19.5
