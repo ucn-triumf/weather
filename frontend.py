@@ -71,17 +71,10 @@ class WeatherEquipment(midas.frontend.EquipmentBase):
 
         name = name.replace(':', '')
         name = name.replace('Absolute', 'Abs')
-        name = name.replace('Adjusted', 'Adj')
-        name = name.replace('Altitude', 'Alt')
         name = name.replace('Average', 'Avg')
-        name = name.replace('Barometric', 'Baro')
         name = name.replace('Direction', 'Dir')
-        name = name.replace('Humidity', 'Hmd')
-        name = name.replace('Pressure', 'Press')
-        name = name.replace('Rolling', 'R')
-        name = name.replace('Saturated', 'Sat')
-        name = name.replace('Speed', 'Spd')
-        name = name.replace('Temperature', 'Tmp')
+
+        assert len(name) <= 31, f"Name '{name}' is too long! (length: {len(name)})"
 
         return name
 
