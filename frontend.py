@@ -94,13 +94,21 @@ class WeatherEquipment(midas.frontend.EquipmentBase):
 
         # fetch
         req = requests.get(self.settings['hostname'], timeout=10)
+
+        if req.status_code != 200:
+            msg = f'Webpage request failed with status {req.status_code}'
+            self.client.msg(msg, is_error=True)
+            raise RuntimeError(msg)
+
         soup = BeautifulSoup(req.content, 'html.parser')
         table = soup.find('table', class_=self.TABLE_CLASS)
 
         if not table:
-            raise RuntimeError(f'Cannot find data table "{self.TABLE_CLASS}"')
+            msg = f'Cannot find data table "{self.TABLE_CLASS}"'
+            self.client.msg(msg, is_error=True)
+            raise RuntimeError(msg)
 
-        # get data
+        # extract data
         data = {}
         for row in table.find_all('tr'):
             name, value = [cell.text.strip() for cell in row.find_all('td')]
@@ -127,11 +135,11 @@ class WeatherEquipment(midas.frontend.EquipmentBase):
         # read data
         data = self.read_webpage()
 
-        # simplify data 
+        # simplify data keys and get values as floats
         data = {self.simplify_name(name):float(str(value).split()[0]) 
                     for name, value in data.items()}
 
-        # bank names must be exactly 4 characters
+        # make event
         event = midas.event.Event()
         event.create_bank(self.BANK_NAME, midas.TID_DOUBLE, 
                           np.fromiter(data.values(), dtype=np.float64))
