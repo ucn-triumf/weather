@@ -54,6 +54,7 @@ class WeatherEquipment(midas.frontend.EquipmentBase):
         
         # You can set the status of the equipment (appears in the midas status page)
         self.set_status("Initialized")
+        self.read_failed = False
 
     @staticmethod
     def get_units(value):
@@ -89,17 +90,13 @@ class WeatherEquipment(midas.frontend.EquipmentBase):
         req = requests.get(self.settings['hostname'], timeout=10)
 
         if req.status_code != 200:
-            msg = f'Webpage request failed with status {req.status_code}'
-            self.client.msg(msg, is_error=True)
-            raise RuntimeError(msg)
+            raise RuntimeError(f'Webpage request failed with status {req.status_code}')
 
         soup = BeautifulSoup(req.content, 'html.parser')
         table = soup.find('table', class_=self.TABLE_CLASS)
 
         if not table:
-            msg = f'Cannot find data table "{self.TABLE_CLASS}"'
-            self.client.msg(msg, is_error=True)
-            raise RuntimeError(msg)
+            raise RuntimeError(f'Cannot find data table "{self.TABLE_CLASS}"')
 
         # extract data
         data = {}
@@ -120,22 +117,40 @@ class WeatherEquipment(midas.frontend.EquipmentBase):
     def readout_func(self):
         """Parse the webpage
 
+        Exceptions are caught so that transient failures (network, malformed
+        page, bad values) don't kill the frontend. Failure and recovery are
+        each logged once, on state change.
+
         Returns:
             midas.event.Event|None: event with a single TID_DOUBLE bank holding
-                the 12 channel temperatures in K, or None if the read failed.
+                the weather station values, or None if the read failed.
         """
 
-        # read data
-        data = self.read_webpage()
+        try:
+            # read data
+            data = self.read_webpage()
 
-        # simplify data keys and get values as floats
-        data = {self.simplify_name(name):float(str(value).split()[0]) 
-                    for name, value in data.items()}
+            # simplify data keys and get values as floats
+            data = {self.simplify_name(name):float(str(value).split()[0]) 
+                        for name, value in data.items()}
 
-        # make event
-        event = midas.event.Event()
-        event.create_bank(self.BANK_NAME, midas.TID_DOUBLE, 
-                          np.fromiter(data.values(), dtype=np.float64))
+            # make event
+            event = midas.event.Event()
+            event.create_bank(self.BANK_NAME, midas.TID_DOUBLE, 
+                              np.fromiter(data.values(), dtype=np.float64))
+
+        except Exception as err:
+            if not self.read_failed:
+                self.client.msg(f'Readout failed: {type(err).__name__}: {err}', is_error=True)
+                self.set_status('Readout failed', status_color='redLight')
+                self.read_failed = True
+            return None
+
+        # log recovery from a previous failure
+        if self.read_failed:
+            self.client.msg('Readout recovered')
+            self.set_status('Running')
+            self.read_failed = False
 
         return event
 
